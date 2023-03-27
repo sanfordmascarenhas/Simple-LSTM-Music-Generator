@@ -10,7 +10,6 @@ from keras.layers import LSTM, Dropout,Dense, BatchNormalization, Activation
 from music21 import converter, instrument, note, chord, stream
 
 DATA_FOLDER_PATH = 'data/' # Dependant folder.
-WEIGHTS_FILE_PATH = DATA_FOLDER_PATH+'model_weights.hdf5' # Training checkpoint.
 NOTES_FILE_PATH = DATA_FOLDER_PATH+'notes' # This file is simply all the songs in one huge list dumped here.
 NETWORK_INPUT_FILE_PATH = DATA_FOLDER_PATH + 'network_input' # This contains a list of song sequences.
 NETWORK_OUTPUT_FILE_PATH = DATA_FOLDER_PATH + 'network_output' # This contains target notes for the network based on the sequences.
@@ -19,13 +18,14 @@ NOTE_TO_NUMBER_DICTIONARY_FILE_PATH = DATA_FOLDER_PATH + 'note_to_number_diction
 
 MIDI_FILE_PATH = 'midi_songs/' # Put your midi tracks in this folder. 
 SEQUENCE_LENGTH = 100 # The model should take this length of notes/samples before trying to guess what should be next.
-EPOCH = 2
-BATCH_SIZE = 20 #128
+EPOCH = 100
+BATCH_SIZE = 32
 LENGTH_OF_SONG = 100
 OFFSET_INCREMENTS = [0.25, 0.5, 0.75,1]
-filepath = "new_weights.hdf5"
+
+WEIGHTS_FILE_PATH = "weights.hdf5"
 checkpoint = ModelCheckpoint(
-        filepath,
+        WEIGHTS_FILE_PATH,
         monitor='loss',
         verbose=1,
         save_best_only=True,
@@ -138,11 +138,14 @@ def create_model(network_input,size_of_vocabulary):
     model.add(LSTM(
         512,
         input_shape=(network_input.shape[1], network_input.shape[2]),
-        recurrent_dropout=0.3,
-        return_sequences=True
+        recurrent_dropout=0,
+        return_sequences=True,
+        use_bias = True,
+        activation = 'tanh'
     ))
-    model.add(LSTM(512, return_sequences=True, recurrent_dropout=0.3,))
-    model.add(LSTM(512))
+    model.add(LSTM(512, return_sequences=True, recurrent_dropout=0, use_bias = True, activation = 'tanh'))
+    model.add(LSTM(512, return_sequences=True, recurrent_dropout=0, use_bias = True, activation = 'tanh'))
+    model.add(LSTM(256))
     model.add(BatchNormalization())
     model.add(Dropout(0.3))
     model.add(Dense(256))
@@ -216,7 +219,6 @@ def convert_to_midi_and_write(song,offset_increments = [0.5]):
 
         # increase offset each iteration so that notes do not stack
         offset += random.choice(offset_increments)
-
     midi_stream = stream.Stream(output_notes)
 
     midi_stream.write('midi', fp='song.mid')
@@ -275,7 +277,7 @@ if __name__ == '__main__':
     model = create_model(network_input, size_of_vocabulary)
 
     # Ask if this program should run in training mode or should it sing?
-    if int(input('Continue training the model? \nThe last completed epoch will be saved, hit 1. \nIf no backup weight files exist, also please hit 1. \nOtherwise to go directly to prediction, hit 0')):
+    if int(input('hit 1 to train and 0 to go directly to predictions.')):
         model.fit(network_input, network_output, epochs=EPOCH, batch_size=BATCH_SIZE, callbacks=CALLBACKS_LIST)
 
     song = sing(model, network_input, vocabulary, size_of_vocabulary, note_to_number_dictionary, LENGTH_OF_SONG)

@@ -158,3 +158,5 @@ midi_songs/
 data/notes
 data/network_input
 data/network_output
+data/note_to_number_dictionary
+data/vocabulary

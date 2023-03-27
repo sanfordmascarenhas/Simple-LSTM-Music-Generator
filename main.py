@@ -4,7 +4,7 @@ import pickle
 import random
 import numpy as np
 from keras.utils import np_utils
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.callbacks import ModelCheckpoint
 from keras.layers import LSTM, Dropout,Dense, BatchNormalization, Activation
 from music21 import converter, instrument, note, chord, stream
@@ -143,8 +143,11 @@ def create_model(network_input,size_of_vocabulary):
         use_bias = True,
         activation = 'tanh'
     ))
+    model.add(Dropout(0.3))
     model.add(LSTM(512, return_sequences=True, recurrent_dropout=0, use_bias = True, activation = 'tanh'))
+    model.add(Dropout(0.3))
     model.add(LSTM(512, return_sequences=True, recurrent_dropout=0, use_bias = True, activation = 'tanh'))
+    model.add(Dropout(0.3))
     model.add(LSTM(256))
     model.add(BatchNormalization())
     model.add(Dropout(0.3))
@@ -158,7 +161,7 @@ def create_model(network_input,size_of_vocabulary):
 
     return model
 
-def sing(model, network_input, vocabulary, size_of_vocabulary, note_to_number_dictionary, length_of_song = 100, inspiration_length = 20):
+def sing(model, network_input, vocabulary, size_of_vocabulary, note_to_number_dictionary, length_of_song = 100):
     '''
     This will take a random point from the music we have and start generating n number of notes from it.
     '''
@@ -182,7 +185,6 @@ def sing(model, network_input, vocabulary, size_of_vocabulary, note_to_number_di
         song.append(note)
 
     return song
-
 
 def convert_to_midi_and_write(song,offset_increments = [0.5]):
     """ 
@@ -279,6 +281,7 @@ if __name__ == '__main__':
     # Ask if this program should run in training mode or should it sing?
     if int(input('hit 1 to train and 0 to go directly to predictions.')):
         model.fit(network_input, network_output, epochs=EPOCH, batch_size=BATCH_SIZE, callbacks=CALLBACKS_LIST)
-
+    
+    model.load_weights(WEIGHTS_FILE_PATH)
     song = sing(model, network_input, vocabulary, size_of_vocabulary, note_to_number_dictionary, LENGTH_OF_SONG)
     convert_to_midi_and_write(song,OFFSET_INCREMENTS)

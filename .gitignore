@@ -160,3 +160,8 @@ data/network_input
 data/network_output
 data/note_to_number_dictionary
 data/vocabulary
+test.ipynb
+song.mid
+
+# For now, since I'm still experimenting and modifying the model. It's not ready.
+weights.hdf5

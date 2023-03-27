@@ -153,3 +153,8 @@ cython_debug/
 
 # Data from other project. Please take it from there itself.
 midi_songs/
+
+# Can create this after running this program the first time
+data/notes
+data/network_input
+data/network_output

@@ -6,7 +6,7 @@ import numpy as np
 from keras.utils import np_utils
 from keras.models import Sequential, load_model
 from keras.callbacks import ModelCheckpoint
-from keras.layers import LSTM, Dropout,Dense, BatchNormalization, Activation
+from keras.layers import LSTM, Dropout,Dense, BatchNormalization, Activation, Flatten
 from music21 import converter, instrument, note, chord, stream
 
 DATA_FOLDER_PATH = 'data/' # Dependant folder.
@@ -17,19 +17,20 @@ VOCABULARY_FILE_PATH = DATA_FOLDER_PATH + 'vocabulary' # This contains the list 
 NOTE_TO_NUMBER_DICTIONARY_FILE_PATH = DATA_FOLDER_PATH + 'note_to_number_dictionary' # This contains the conversion table of notes to an encoded number.
 
 MIDI_FILE_PATH = 'midi_songs/' # Put your midi tracks in this folder. 
-SEQUENCE_LENGTH = 100 # The model should take this length of notes/samples before trying to guess what should be next.
-EPOCH = 100
-BATCH_SIZE = 32
-LENGTH_OF_SONG = 100
-OFFSET_INCREMENTS = [0.25, 0.5, 0.75,1]
+SEQUENCE_LENGTH = 100 # Used for creating sequences for training and generating.
+EPOCH = 200
+BATCH_SIZE = 70
+LENGTH_OF_SONG = 100 # The generated song will be this long
+OFFSET_INCREMENTS = [0.25, 0.5, 0.75,1] # offset selection for notes. The model can't figure it out yet, so we do this randomly just for variation. 
 
 WEIGHTS_FILE_PATH = "weights.hdf5"
 checkpoint = ModelCheckpoint(
         WEIGHTS_FILE_PATH,
-        monitor='loss',
+        monitor='accuracy',
         verbose=1,
         save_best_only=True,
-        mode='min'
+        mode = 'max'
+      
     )
 CALLBACKS_LIST = [checkpoint]
 
@@ -110,7 +111,7 @@ def sequence_and_target(notes, size_of_vocabulary, sequence_length=100):
     # reshape the input into a format compatible with LSTM layers
     network_input = np.reshape(network_input, (number_of_sequences, sequence_length, 1))
     # normalize input
-    # network_input = network_input / float(n_vocab)
+    network_input = network_input / float(size_of_vocabulary)
 
     # One Hot Encoding of sorts.
     network_output = np_utils.to_categorical(network_output) 
@@ -136,28 +137,17 @@ def create_model(network_input,size_of_vocabulary):
     '''
     model = Sequential()
     model.add(LSTM(
-        512,
+        20,
         input_shape=(network_input.shape[1], network_input.shape[2]),
         recurrent_dropout=0,
         return_sequences=True,
         use_bias = True,
         activation = 'tanh'
     ))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True, recurrent_dropout=0, use_bias = True, activation = 'tanh'))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512, return_sequences=True, recurrent_dropout=0, use_bias = True, activation = 'tanh'))
-    model.add(Dropout(0.3))
-    model.add(LSTM(256))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.3))
-    model.add(Dense(256))
-    model.add(Activation('relu'))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.3))
+    model.add(Flatten())
     model.add(Dense(size_of_vocabulary))
     model.add(Activation('softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+    model.compile(loss='categorical_crossentropy', optimizer='Adam', metrics=['accuracy'])
 
     return model
 
@@ -180,6 +170,8 @@ def sing(model, network_input, vocabulary, size_of_vocabulary, note_to_number_di
         encoded_note = np.argmax(notes_probability_list)
         inspiration_sequence = np.append(inspiration_sequence, encoded_note) # Add that to it's notepad for the next prediction.
 
+        # New sequence is same length with the added note.
+        inspiration_sequence = inspiration_sequence[1:]
         # Decode the encoding to a chord/note/rest and save it.
         note = number_note_dictionary[encoded_note]
         song.append(note)
@@ -221,6 +213,8 @@ def convert_to_midi_and_write(song,offset_increments = [0.5]):
 
         # increase offset each iteration so that notes do not stack
         offset += random.choice(offset_increments)
+
+        # offset += 0.5
     midi_stream = stream.Stream(output_notes)
 
     midi_stream.write('midi', fp='song.mid')
@@ -252,13 +246,6 @@ if __name__ == '__main__':
         with open(NOTES_FILE_PATH, 'rb') as filepath:
             notes = pickle.load(filepath)
     
-    # Check if there's any checkpoint file.
-    #if os.path.isfile(WEIGHTS_FILE_PATH):
-    #    print(f"{WEIGHTS_FILE_PATH} exists!\nWill train from here.")
-    #else:
-    #    print(f"{WEIGHTS_FILE_PATH} does not exist.\nWill create new checkpoint.")
-    
-    # Get the number of unique notes.
     size_of_vocabulary = len(set(notes))
 
     # Check for a backup file
@@ -279,8 +266,11 @@ if __name__ == '__main__':
     model = create_model(network_input, size_of_vocabulary)
 
     # Ask if this program should run in training mode or should it sing?
-    if int(input('hit 1 to train and 0 to go directly to predictions.')):
-        model.fit(network_input, network_output, epochs=EPOCH, batch_size=BATCH_SIZE, callbacks=CALLBACKS_LIST)
+    if int(input('Hit 1 to train more and 0 to make a song file.\n')):
+        try: # This will try to imoprt the weights if it's compatible.
+            model.load_weights(WEIGHTS_FILE_PATH)
+        finally:
+            model.fit(network_input, network_output, epochs=EPOCH, batch_size=BATCH_SIZE, callbacks=CALLBACKS_LIST)
     
     model.load_weights(WEIGHTS_FILE_PATH)
     song = sing(model, network_input, vocabulary, size_of_vocabulary, note_to_number_dictionary, LENGTH_OF_SONG)
